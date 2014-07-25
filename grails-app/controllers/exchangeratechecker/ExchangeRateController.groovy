@@ -21,64 +21,126 @@ class ExchangeRateController {
     }
     
     def getrates(){
+        if ((params.currency_one == null) || (params.currency_two == null)){
+            //this should all be done in a constructor but the constructor syntax was new to me 
+            //and I didn't have time to figure out the errors after the first try
+            print "First time page loadin..."
+            ExchangeRate ex = new ExchangeRate()
+            ex.exchangerate_one = 0
+            ex.exchangerate_two = 0
+            ex.exchangerate_three = 0
+            ex.date_one = new Date(0)
+            ex.date_two = new Date(0)
+            ex.date_three = new Date(0)
+            ex.basecurrency = new Currency()
+            ex.targetcurrency = new Currency()
+            return [exchangeobj:ex]
+        }
         exchangeratechecker.Currency basecurr = exchangeratechecker.Currency.findBySymbol(params.currency_one)
-        //Currency targetcurr = Currency.get(params.currency_two)
-        println basecurr.symbol
-        println params.currency_one
-        //println targetcurr
-//        ExchangeRate exrate = new ExchangeRate()
-//        exrate.basecurrency = basecurr
-//        exrate.targetcurrency = targetcurr
-//        println exrate.save(flush: true)
-        //exrate = getExchangeRate(exrate)
+        exchangeratechecker.Currency targetcurr = exchangeratechecker.Currency.findBySymbol(params.currency_two)
         
+        ExchangeRate exrate = new ExchangeRate()
+        if (basecurr != null){
+            println "Base Currency was NOT null"
+            exrate.basecurrency = basecurr
+        }
+        if (targetcurr != null){
+            println "Target Currency was NOT null"
+            exrate.targetcurrency = targetcurr
+        }
+        //initializing ExchangeRate object members (this should be done in a constructor)
+        exrate.date_one = new Date(0)
+        exrate.date_two = new Date(0)
+        exrate.date_three = new Date(0)
+        exrate.exchangerate_one = 0
+        exrate.exchangerate_two = 0
+        exrate.exchangerate_three = 0
         
- 
-        //return exrate
+        //calling the rate method
+        exrate = getExchangeRate(exrate)
+
+        [exchangeobj:exrate]
     }
     def getExchangeRate(ExchangeRate ex){
-        //base rate is based on USD
+        //base rate is based on USD when the source did not offer exchange rate between any random currencies
+        //println ex.basecurrency.symbol
+        Currency basecurr = Currency.findBySymbol(ex.basecurrency.symbol)
+        Currency targetcurr = Currency.findBySymbol(ex.targetcurrency.symbol)
         
-        Currency basecurr = Currency?.findBySymbol(ex.basecurrency.symbol)
-        Currency targetcurr = Currency?.findBySymbol(ex.targetcurrency.symbol)
-        
-        //source one: http://openexchangerates.org using USD as base rate
+        //source one: http://openexchangerates.org using USD as base rate (all currencies based off of USD)
         def (USDbaserate_base, USDbasedate_base) = getInfoFromOpenExchange(ex.basecurrency.symbol)
         def (USDbaserate_target, USDbasedate_target) = getInfoFromOpenExchange(ex.targetcurrency.symbol)
         
-        ex.exchangerate_one = USDbaserate_target "/" USDbaserate_base
+        ex.exchangerate_one = (double)USDbaserate_target / (double)USDbaserate_base
         ex.date_one = USDbasedate_base
+        println "This is running"
+        println ex.date_one
+        println ex.exchangerate_one
         //also updates the Currency Objects With the latest rates
         basecurr.rate_one = USDbaserate_base
         basecurr.time_one = USDbasedate_base
-        basecurr.save(flush: true)
+        if (!basecurr.save(flush: true)){
+            println "Couldn't save Base Currency object"
+            basecurr.errors.each { println it}
+        }
         //also updates the Currency Objects With the latest rates
         targetcurr.rate_one = USDbaserate_target
         targetcurr.time_one = USDbasedate_target
-        targetcurr.save(flush: true)
-        
-        //source two
-        //source three
-        ex
-    }
-//daram ino dor mizanam
-    protected void updateBaseRateAndDate(Currency currency){
+        if (!targetcurr.save(flush: true)){
+            println "Couldn't save Target Currency object"
+            basecurr.errors.each { println it}
+        }
+        //source two: http://rate-exchange.appspot.com/
+        def exrate_two = getInfoFromRateExchange(ex.basecurrency.symbol,ex.targetcurrency.symbol)
 
+        ex.exchangerate_two = exrate_two
+        ex.date_two = new Date() //the original source is XE as per the info on the service page but as date was not provided, NOW is used instead 
         
-//        //source two
-//        currencies.each { obj -> obj.rate_two = getRateFromCurrencyAPI(obj.symbol)};
-//        currencies.each { obj -> Currency currency = Currency.findBySymbol(obj.symbol)
-//            currency.rate_two = obj.rate_two
-//            currency.save(flush: true)};
-//        
-//        //source three
-//        currencies.each { obj -> obj.rate_three = getRateFromRateExchange(obj.symbol)};
-//        currencies.each { obj -> Currency currency = Currency.findBySymbol(obj.symbol)
-//            currency.rate_three = obj.rate_three
-//            currency.save(flush: true)};
-//        getRateFromYahooFinance("USD")
+        basecurr.rate_two = getInfoFromRateExchange("USD",ex.basecurrency.symbol)
+        basecurr.time_two = new Date()
+        if (!basecurr.save(flush: true)){
+            println "Couldn't save Base Currency object"
+            basecurr.errors.each { println it}
+        }
+        //also updates the Currency Objects With the latest rates
+        targetcurr.rate_two = getInfoFromRateExchange("USD",ex.targetcurrency.symbol)
+        targetcurr.time_two = USDbasedate_target
+        if (!targetcurr.save(flush: true)){
+            println "Couldn't save Target Currency object"
+            basecurr.errors.each { println it}
+        }
+        
+        
+        //source three (yaho finance was to be used but I ran into issues parsing the XML (the incomplete method is below)
+        
+        def exrate_three = getInfoFromFreeCurrencyConverter(ex.basecurrency.symbol,ex.targetcurrency.symbol)
+
+        ex.exchangerate_three = exrate_three
+        ex.date_three = new Date() //the original source is XE as per the info on the service page but as date was not provided, NOW is used instead 
+        
+        basecurr.rate_three = getInfoFromFreeCurrencyConverter("USD",ex.basecurrency.symbol)
+        basecurr.time_three = new Date()
+        if (!basecurr.save(flush: true)){
+            println "Couldn't save Base Currency object"
+            basecurr.errors.each { println it}
+        }
+        //also updates the Currency Objects With the latest rates
+        targetcurr.rate_three = getInfoFromFreeCurrencyConverter("USD",ex.targetcurrency.symbol)
+        targetcurr.time_three = USDbasedate_target
+        if (!targetcurr.save(flush: true)){
+            println "Couldn't save Target Currency object"
+            basecurr.errors.each { println it}
+        }
+        
+        if (!ex.save(flush: true)){
+                println "Couldn't save exchange object"
+                ex.errors.each { println it}
+        }
+        return ex
     }
+
     def getInfoFromYahooFinance(String sym){
+        //under maintenance
         //http://finance.yahoo.com/webservice
         String Rates_URI = 'http://finance.yahoo.com/webservice/v1/symbols/allcurrencies/quote'
         
@@ -106,9 +168,10 @@ class ExchangeRateController {
 
         //println rate
     }
-    def getInfoFromRateExchange(String sym){
+    def getInfoFromRateExchange(String basesym, String targetsym){
+        
         //http://rate-exchange.appspot.com/
-        String Rates_URI = 'http://rate-exchange.appspot.com/currency?from=USD&to='+sym+'&q=1'
+        String Rates_URI = 'http://rate-exchange.appspot.com/currency?from='+basesym+'&to='+targetsym+'&q=1'
         
         def apiURI = new URL(Rates_URI)
 
@@ -144,7 +207,29 @@ class ExchangeRateController {
             return [0,new Date()]
         }
     }
+    def getInfoFromFreeCurrencyConverter(String basesym, String targetsym){
+        //http://www.freecurrencyconverterapi.com/api/convert?q=USD-EUR
+        String Rates_URI = 'http://www.freecurrencyconverterapi.com/api/convert?q='+basesym+'-'+targetsym
+        
+        def apiURI = new URL(Rates_URI)
+
+        def slurper = new JsonSlurper()
+        def currency = slurper.parse(apiURI)
+        println "3rd result"
+        String query = basesym+'-'+targetsym
+        Map jasonresult = (Map)currency
+        def results = jasonresult.get("query")
+        def rate = results.get("val")
+        if ((String)rate != null){
+            println "This Currency Is Supported"
+            return (double)rate
+        } else {
+            println "This Currency Is not Supported"
+            return 0
+        }
+    }
     def getInfoFromCurrencyAPI(String sym){
+        //not used as the available currencies are so few, just leaving here for future reference
         //http://currency-api.appspot.com
         String Rates_URI = 'http://currency-api.appspot.com/api/USD/' +sym+ '.json?key=6279598601eae2d106fa9481a421311f4d75287e'
         def apiURI = new URL(Rates_URI)

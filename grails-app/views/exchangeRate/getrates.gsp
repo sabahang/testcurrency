@@ -1,4 +1,6 @@
 <%@ page import="exchangeratechecker.Currency" %>
+<%@ page import="exchangeratechecker.ExchangeRate" %>
+
 <!DOCTYPE html>
 
 <html>
@@ -8,11 +10,16 @@
     </head>
     <body>
         <div>
+            <h1>Currency Exchange Rate Aggregator by @sabahang</h1>
+        </div>
+        <div>
             <g:form name="selectCurrencyForm" url="[action:'getrates',controller:'exchangeRate']">
+                <p>Base Currency: </p>
                 <g:select name="currency_one" from="${Currency.list()}" optionValue="name" optionKey="symbol"/>
+                <p>Target Currency: </p>
                 <g:select name="currency_two" from="${Currency.list()}" optionValue="name" optionKey="symbol" />
                 
-                <g:submitButton name="submit" value="Show Rates" />
+                <g:submitButton name="Query" value="Show Rates" />
                 
             </g:form>
 
@@ -27,10 +34,10 @@
             </style>
 
             <table class="tftable" border="1">
-                <tr><th>Exchange Currencies</th><th>Open Exchange</th><th>Currency API</th><th>Rate Exchange</th></tr>
+                <tr><th>Exchange Currencies</th><th>openexchangerates.org (${exchangeobj.date_one})</th><th>rate-exchange.appspot.com (${exchangeobj.date_two})</th><th>freecurrencyconverterapi.com (${exchangeobj.date_three})</th></tr>
                 
-<!--                <tr><td> 1 ${exrate?.basecurrency?.symbol} in ${exrate?.targetcurrency?.symbol}
-                    </td><td>${exrate?.exchangerate_one}</td><td>Currency API</td><td>Rate Exchange</td></tr>-->
+                <tr><td> 1 ${exchangeobj?.basecurrency?.symbol} in ${exchangeobj?.targetcurrency?.symbol}
+                    </td><td>${exchangeobj?.exchangerate_one}</td><td>${exchangeobj?.exchangerate_two}</td><td>${exchangeobj?.exchangerate_three}</td></tr>
 
             </table>
 
